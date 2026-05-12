@@ -1,0 +1,130 @@
+name: Rebrand Musicmax to BeeMusic
+
+on:
+  workflow_dispatch:
+
+jobs:
+  rebrand:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Git
+        run: |
+          git config --global user.name "github-actions"
+          git config --global user.email "actions@github.com"
+
+      - name: Install Dependencies
+        run: |
+          sudo apt update
+          sudo apt install -y rename
+
+      - name: Detect Existing Package
+        id: detect
+        run: |
+          PACKAGE=$(grep -R "applicationId" app/ | head -n 1 | sed 's/.*applicationId[[:space:]]*"\(.*\)".*/\1/')
+          echo "PACKAGE=$PACKAGE" >> $GITHUB_ENV
+
+          NAMESPACE=$(grep -R "namespace" app/ | head -n 1 | sed 's/.*namespace[[:space:]]*"\(.*\)".*/\1/')
+          echo "NAMESPACE=$NAMESPACE" >> $GITHUB_ENV
+
+          echo "Detected package: $PACKAGE"
+          echo "Detected namespace: $NAMESPACE"
+
+      - name: Replace Strings
+        run: |
+          find . -type f \( \
+            -name "*.kt" -o \
+            -name "*.java" -o \
+            -name "*.xml" -o \
+            -name "*.gradle" -o \
+            -name "*.kts" -o \
+            -name "*.md" -o \
+            -name "*.properties" -o \
+            -name "*.json" \
+          \) -exec sed -i \
+          -e 's/Musicmax/BeeMusic/g' \
+          -e 's/musicmax/beemusic/g' \
+          -e 's/MUSICMAX/BEEMUSIC/g' \
+          {} +
+
+      - name: Replace Package Name
+        run: |
+          OLD_PACKAGE="${PACKAGE}"
+          NEW_PACKAGE="com.kur0iber.beemusic"
+
+          echo "Old package: $OLD_PACKAGE"
+          echo "New package: $NEW_PACKAGE"
+
+          OLD_ESCAPED=$(echo "$OLD_PACKAGE" | sed 's/\./\\./g')
+          NEW_ESCAPED=$(echo "$NEW_PACKAGE" | sed 's/\./\\./g')
+
+          find . -type f \( \
+            -name "*.kt" -o \
+            -name "*.java" -o \
+            -name "*.xml" -o \
+            -name "*.gradle" -o \
+            -name "*.kts" \
+          \) -exec sed -i \
+          -e "s/$OLD_ESCAPED/$NEW_ESCAPED/g" \
+          {} +
+
+      - name: Move Kotlin Package
+        run: |
+          OLD_PATH=$(echo "${PACKAGE}" | tr '.' '/')
+          NEW_PATH="com/kur0iber/beemusic"
+
+          mkdir -p app/src/main/java/com/kur0iber
+          mkdir -p app/src/main/kotlin/com/kur0iber
+
+          if [ -d "app/src/main/java/$OLD_PATH" ]; then
+            mv "app/src/main/java/$OLD_PATH" \
+               "app/src/main/java/$NEW_PATH"
+          fi
+
+          if [ -d "app/src/main/kotlin/$OLD_PATH" ]; then
+            mv "app/src/main/kotlin/$OLD_PATH" \
+               "app/src/main/kotlin/$NEW_PATH"
+          fi
+
+      - name: Update Project Name
+        run: |
+          sed -i 's/rootProject.name *= *.*/rootProject.name = "BeeMusic"/g' settings.gradle || true
+          sed -i 's/rootProject.name *= *.*/rootProject.name = "BeeMusic"/g' settings.gradle.kts || true
+
+      - name: Replace App Name
+        run: |
+          find app/src/main/res -name "strings.xml" -exec sed -i \
+          's/<string name="app_name">.*<\/string>/<string name="app_name">BeeMusic<\/string>/g' {} +
+
+      - name: Generate Simple BeeMusic Icon
+        run: |
+          mkdir -p app/src/main/res/drawable
+
+          cat > app/src/main/res/drawable/beemusic_logo.xml << 'EOF'
+          <vector xmlns:android="http://schemas.android.com/apk/res/android"
+              android:width="108dp"
+              android:height="108dp"
+              android:viewportWidth="108"
+              android:viewportHeight="108">
+              <path
+                  android:fillColor="#FFC107"
+                  android:pathData="M54,10A44,44 0,1 1,10 54A44,44 0,0 1,54 10z"/>
+          </vector>
+          EOF
+
+      - name: Clean Build
+        run: |
+          chmod +x gradlew || true
+          ./gradlew clean || true
+
+      - name: Commit Changes
+        run: |
+          git add .
+          git commit -m "Rebrand Musicmax -> BeeMusic" || echo "No changes"
+
+      - name: Push Changes
+        run: |
+          git push
